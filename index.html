@@ -9,12 +9,42 @@
       margin: 0px;
       padding: 0px;
     }
+    #capture {
+      position: absolute;
+      top: -80px;
+      left: 0px;
+      background-color: white;
+      transition: top 0.7s;
+    }
+    #capture button {
+      font-size: 16px;
+      padding: 10px;
+      margin: 10px;
+      <!--width: 300px;-->
+      <!--height: 100px;-->
+    }
+    body:hover #capture {
+      top: 0px;
+    }
+    @media only screen and  (max-device-width : 1024px) and (orientation : portrait) {
+      #capture {
+        top: 0px;
+      }
+    }
   </style>
 </head>
 <body>
 <canvas id="glcanvas" width="640" height="480"></canvas>
 
-<script src="gl-matrix.js"></script>
+<div id="capture">
+<button onClick="startCapture()">record</button>
+<button onClick="stopCapture()">stop</button>
+<button onClick="saveCapture()">save</button>
+<button onClick="saveCaptureMp4()">save mp4</button>
+</div>
+<script src="vendor/CCapture.all.min.js"></script>
+<script src="vendor/gl-matrix.js"></script>
+<script src="convert.js"></script>
 <script src="common.js"></script>
 <script src="frag.js"></script>
 <script src="main.js"></script>

@@ -1,4 +1,85 @@
 
+const CAPTURE_FRAMERATE = 60;
+let capturer;
+
+function startCapture() {
+  capturer = new CCapture({
+    format: 'webm',
+    verbose: true,
+    timeLimit: 6,
+    framerate: CAPTURE_FRAMERATE,
+  });
+
+  capturer.start();
+}
+
+function stopCapture() {
+  capturer.stop();
+}
+
+function saveCapture() {
+  capturer.save();
+  //capturer.save(function( blob ) {
+    //console.log('data?', blob)
+    //var reader = new FileReader();
+    //reader.readAsDataURL(blob); 
+    //reader.onloadend = function() {
+      //console.log('base64', reader.result);
+      ////saveContent(reader.result, 'vid.webm')
+      //base64data = reader.result.replace(/.+base64,/, 'data:application/octet-stream;base64,');
+      ////base64data = reader.result.replace(/.+base64,/, 'data:video/webm;base64,');
+      //window.location = base64data;
+    //}
+  //});
+}
+
+function saveCaptureMp4() {
+  capturer.save(function( blob ) {
+    console.log('data?', blob)
+    convertStreams(blob, function (result) {
+      console.log('converted?', result);
+      const url = URL.createObjectURL(result);
+      console.log('url?', url);
+      saver(url, true, 'video.mp4');
+      //var reader = new FileReader();
+      //reader.readAsDataURL(result);
+      //reader.onloadend = function() {
+        //console.log('base64', reader.result);
+        //saver(reader.result, true)
+      //}
+    });
+  });
+}
+
+function saver(url, winMode, name){
+  let a = document.createElement('a');
+  if ('download' in a) { //html5 A[download] 			
+    a.href = url;
+    a.setAttribute("download", name);
+    a.innerHTML = "downloading...";
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    setTimeout(function() {
+      a.click();
+      document.body.removeChild(a);
+      if(winMode===true){
+        setTimeout(function(){ URL.revokeObjectURL(a.href);}, 250 );
+      }
+    }, 66);
+    return true;
+  }
+
+  //do iframe dataURL download (old ch+FF):
+  var f = document.createElement("iframe");
+  document.body.appendChild(f);
+  if(!winMode){ // force a mime that will download:
+    url="data:"+url.replace(/^data:([\w\/\-\+]+)/, u);
+  }
+
+  f.src = url;
+  setTimeout(function(){ document.body.removeChild(f); }, 333);
+}
+
 //
 // Initialize a shader program, so WebGL knows how to draw our data
 //
@@ -55,7 +136,10 @@ function initGL({
     drawScene,
     width,
     height,
+    capture = false,
   }) {
+
+  // Create a capturer that exports a WebM video
 
   canvas.width = width || window.innerWidth;
   canvas.height = height || window.innerHeight;
@@ -76,19 +160,23 @@ function initGL({
 
   const program = initProgram(gl);
 
+  // if delta gets screwed up because of a new "now" when capture
+  // starts use this delta instead
+  const subDelta = 1 / CAPTURE_FRAMERATE;
+
   var then = 0;
-  var time = 0;
   // Draw the scene repeatedly
   function render(now) {
     now *= 0.001;  // convert to seconds
     const deltaTime = now - then;
     then = now;
-    time += deltaTime;
 
     // Draw the scene
-    drawScene(gl, program.programInfo, program.buffers, time);
+    drawScene(gl, program.programInfo, program.buffers, deltaTime < 0 ? subDelta : deltaTime);
 
     requestAnimationFrame(render);
+    //console.log('now', deltaTime, now)
+    if (capturer) capturer.capture(canvas);
   }
   requestAnimationFrame(render);
 

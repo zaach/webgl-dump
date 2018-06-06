@@ -172,7 +172,8 @@ function initBuffers2d(gl) {
 //
 // Draw the scene.
 //
-function drawScene2d(gl, programInfo, buffers, time, width, height) {
+let sceneTime2d = 0;
+function drawScene2d(gl, programInfo, buffers, deltaTime, width, height) {
   // Tell WebGL to use our program when drawing
   gl.useProgram(programInfo.program);
 
@@ -213,12 +214,14 @@ function drawScene2d(gl, programInfo, buffers, time, width, height) {
 
   gl.uniform1f(
      programInfo.uniformLocations.u_time,
-     time);
+     sceneTime2d);
 
   {
     const offset = 0;
     const vertexCount = 4;
     gl.drawArrays(gl.TRIANGLE_STRIP, offset, vertexCount);
   }
+
+  sceneTime2d += deltaTime;
 }
 

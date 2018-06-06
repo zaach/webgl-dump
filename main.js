@@ -361,11 +361,12 @@ function initElementBuffers(gl) {
 //
 // Draw the scene.
 //
-function drawElementScene(gl, programInfo, buffers, time) {
+let sceneTime = 0;
+function drawElementScene(gl, programInfo, buffers, deltaTime) {
 
   gl.bindFramebuffer(gl.FRAMEBUFFER, buffers.framebuffer);
   gl.viewport(0,0, 512, 512);
-  drawScene2d(gl, programInfo.program2d.programInfo, programInfo.program2d.buffers, time, 512, 512);
+  drawScene2d(gl, programInfo.program2d.programInfo, programInfo.program2d.buffers, deltaTime, 512, 512);
 
   gl.bindFramebuffer(gl.FRAMEBUFFER,null);
   gl.viewport(0,0, gl.canvas.clientWidth, gl.canvas.clientHeight);
@@ -409,14 +410,14 @@ function drawElementScene(gl, programInfo, buffers, time) {
 
   mat4.translate(modelViewMatrix,     // destination matrix
                  modelViewMatrix,     // matrix to translate
-                 [-0.0, 0.0, -6.0]);  // amount to translate
+                 [-0.0, 0.0, -8.0]);  // amount to translate
   mat4.rotate(modelViewMatrix,  // destination matrix
               modelViewMatrix,  // matrix to rotate
-              time,     // amount to rotate in radians
+              sceneTime * 4,     // amount to rotate in radians
               [0, 0, 1]);       // axis to rotate around (Z)
   mat4.rotate(modelViewMatrix,  // destination matrix
               modelViewMatrix,  // matrix to rotate
-              time * .7,// amount to rotate in radians
+              sceneTime * 2.7,// amount to rotate in radians
               [0, 1, 0]);       // axis to rotate around (X)
 
   const normalMatrix = mat4.create();
@@ -523,7 +524,7 @@ function drawElementScene(gl, programInfo, buffers, time) {
 
   gl.uniform1f(
      programInfo.uniformLocations.u_time,
-     time);
+     sceneTime);
 
   // Tell WebGL we want to affect texture unit 0
   gl.activeTexture(gl.TEXTURE0);
@@ -540,5 +541,7 @@ function drawElementScene(gl, programInfo, buffers, time) {
     const offset = 0;
     gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
   }
+
+  sceneTime += deltaTime;
 }
 
