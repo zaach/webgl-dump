@@ -11,7 +11,7 @@
     }
     #capture {
       position: absolute;
-      top: -80px;
+      top: -800px;
       left: 0px;
       background-color: white;
       transition: top 0.7s;
@@ -41,12 +41,19 @@
 <button onClick="stopCapture()">stop</button>
 <button onClick="saveCapture()">save</button>
 <button onClick="saveCaptureMp4()">save mp4</button>
+<button id="record-video">Record Webcam</button>
+<button id="stop-recording-video" disabled>Stop Recording</button>
+  <video id="video-preview" controls loop></video>
 </div>
+<script src="vendor/RecordRTC.js"></script>
 <script src="vendor/CCapture.all.min.js"></script>
+<script src="vendor/omggif.js"></script>
 <script src="vendor/gl-matrix.js"></script>
 <script src="convert.js"></script>
 <script src="common.js"></script>
+<script src="gif.js"></script>
 <script src="frag.js"></script>
+<script src="image.js"></script>
 <script src="main.js"></script>
 </body>
 </html>

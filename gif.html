@@ -9,16 +9,23 @@
       margin: 0px;
       padding: 0px;
     }
+    body {
+      background: gray;
+    }
   </style>
 </head>
 <body>
 <canvas id="glcanvas" width="640" height="480"></canvas>
+<p>
+<button onclick="toggleDirection()">reverse</button>
+<button onclick="changeSpeed(2)">slower</button>
+<button onclick="changeSpeed(1/2)">faster</button>
 
-<script src="vendor/gl-matrix.js"></script>
+<script src="vendor/omggif.js"></script>
 <script src="common.js"></script>
-<script src="frag.js"></script>
+<script src="gif.js"></script>
 <script>
-  main2d()
+mainGif();
 </script>
 </body>
 </html>

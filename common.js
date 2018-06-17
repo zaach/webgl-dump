@@ -1,6 +1,7 @@
 
 const CAPTURE_FRAMERATE = 60;
 let capturer;
+let isCapturing = false;
 
 function startCapture() {
   capturer = new CCapture({
@@ -8,52 +9,39 @@ function startCapture() {
     verbose: true,
     timeLimit: 6,
     framerate: CAPTURE_FRAMERATE,
+    //motionBlurFrames: 20,
   });
 
+  //if (videoPreview) {
+    //videoPreview.pause();
+    //videoPreview.currentTime = 0;
+  //}
+  isCapturing = true;
   capturer.start();
 }
 
 function stopCapture() {
   capturer.stop();
+  isCapturing = false;
 }
 
 function saveCapture() {
   capturer.save();
-  //capturer.save(function( blob ) {
-    //console.log('data?', blob)
-    //var reader = new FileReader();
-    //reader.readAsDataURL(blob); 
-    //reader.onloadend = function() {
-      //console.log('base64', reader.result);
-      ////saveContent(reader.result, 'vid.webm')
-      //base64data = reader.result.replace(/.+base64,/, 'data:application/octet-stream;base64,');
-      ////base64data = reader.result.replace(/.+base64,/, 'data:video/webm;base64,');
-      //window.location = base64data;
-    //}
-  //});
 }
 
 function saveCaptureMp4() {
   capturer.save(function( blob ) {
-    console.log('data?', blob)
     convertStreams(blob, function (result) {
-      console.log('converted?', result);
       const url = URL.createObjectURL(result);
-      console.log('url?', url);
       saver(url, true, 'video.mp4');
-      //var reader = new FileReader();
-      //reader.readAsDataURL(result);
-      //reader.onloadend = function() {
-        //console.log('base64', reader.result);
-        //saver(reader.result, true)
-      //}
     });
   });
 }
 
-function saver(url, winMode, name){
+// from ccapture source
+function saver(url, winMode, name) {
   let a = document.createElement('a');
-  if ('download' in a) { //html5 A[download] 			
+  if ('download' in a) {
     a.href = url;
     a.setAttribute("download", name);
     a.innerHTML = "downloading...";
@@ -176,7 +164,12 @@ function initGL({
 
     requestAnimationFrame(render);
     //console.log('now', deltaTime, now)
-    if (capturer) capturer.capture(canvas);
+    if (capturer) {
+      capturer.capture(canvas);
+    }
+    //if (isCapturing && videoPreview) {
+      //videoPreview.currentTime += deltaTime < 0 ? subDelta : deltaTime;
+    //}
   }
   requestAnimationFrame(render);
 
@@ -187,7 +180,7 @@ function initGL({
 // Initialize a texture and load an image.
 // When the image finished loading copy it into the texture.
 //
-function loadTexture(gl, url) {
+function loadTexture(gl, url, cb) {
   const texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
 
@@ -227,6 +220,7 @@ function loadTexture(gl, url) {
        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     }
+    if (cb) cb(image);
   };
   image.src = url;
 
@@ -249,5 +243,153 @@ function createAndSetupTexture(gl) {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
 
   return texture;
+}
+
+var recordVideo;
+var videoPreview = document.getElementById('video-preview');
+let videoReady = false;
+let videoInit = false;
+let animationFrames = [];
+
+function selectFrame(frames, rate, time) {
+  const duration = frames.length / rate;
+  //console.log('FRAME??', rate, frames.length, time, duration, Math.floor(rate * (time % duration)))
+  return frames[Math.floor(rate * (time % duration))];
+}
+
+function setupWebcam() {
+document.querySelector('#record-video').onclick = function() {
+    this.disabled = true;
+    navigator.getUserMedia({
+            video: true
+        }, function(stream) {
+            videoPreview.src = URL.createObjectURL(stream);
+            //videoPreview.srcObject = stream;
+            videoPreview.play();
+
+            recordVideo = RecordRTC(stream, {
+                type: 'video'
+            });
+
+            recordVideo.startRecording();
+        }, function(error) { throw error;});
+    document.querySelector('#stop-recording-video').disabled = false;
+};
+
+document.querySelector('#stop-recording-video').onclick = function() {
+    this.disabled = true;
+
+    recordVideo.stopRecording(function(url) {
+        console.log('URLLL', url)
+        videoPreview.src = url;
+        videoPreview.download = 'video.webm';
+        videoPreview.addEventListener('playing', function onplay () {
+          videoReady = true;
+          videoInit = true;
+          videoPreview.removeEventListener('playing', onplay)
+        })
+        videoPreview.play();
+        convertToJpeg(recordVideo.getBlob(), (frames) => {
+          //const url = URL.createObjectURL(result);
+          console.log('we back', frames, videoPreview.duration, frames.length * (1/videoPreview.duration))
+          let loaded = 0;
+          const images = frames.map(frame => {
+            let img = new Image();
+            img.onload = () => {
+              if(++loaded === frames.length) {
+                console.log('IMAGES done', images)
+                animationFrames = images;
+              }
+            }
+            img.src = frame
+            return img
+          });
+        });
+        //videoReady = true;
+    });
+};
+}
+
+function initVideoTexture(gl) {
+  const texture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+
+  // Because video has to be download over the internet
+  // they might take a moment until it's ready so
+  // put a single pixel in the texture so we can
+  // use it immediately.
+  const level = 0;
+  const internalFormat = gl.RGBA;
+  const width = 1;
+  const height = 1;
+  const border = 0;
+  const srcFormat = gl.RGBA;
+  const srcType = gl.UNSIGNED_BYTE;
+  const pixel = new Uint8Array([0, 0, 255, 255]);  // opaque blue
+  gl.texImage2D(gl.TEXTURE_2D, level, internalFormat,
+                width, height, border, srcFormat, srcType,
+                pixel);
+
+  // Turn off mips and set  wrapping to clamp to edge so it
+  // will work regardless of the dimensions of the video.
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+
+  return texture;
+}
+
+function updateVideoTexture(gl, texture, video) {
+  const level = 0;
+  const internalFormat = gl.RGBA;
+  const srcFormat = gl.RGBA;
+  const srcType = gl.UNSIGNED_BYTE;
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  if (videoInit) {
+    videoInit = false;
+    gl.texImage2D(gl.TEXTURE_2D, level, internalFormat,
+                  srcFormat, srcType, video);
+  } else {
+    gl.texSubImage2D(
+        gl.TEXTURE_2D, 0, 0, 0, gl.RGBA,
+        gl.UNSIGNED_BYTE, video);
+  }
+}
+
+function fetchImage(url, cb) {
+  let xhr = new XMLHttpRequest()
+  xhr.open('GET', url, true)
+  xhr.responseType = 'arraybuffer'
+
+  let promise = new Promise((resolve, reject) => {
+    xhr.onload = function (e) { resolve(this.response) }
+  })
+  xhr.send()
+  return promise
+}
+
+let loadedGif = null
+function loadGif(url) {
+  fetchImage(url)
+  .then(data => deconstructGif(data))
+  .then(result => {
+    videoInit = true;
+    loadedGif = result
+  })
+}
+
+function rectanglePositions(x, y, width, height) {
+  var x1 = x;
+  var x2 = x + width;
+  var y1 = y;
+  var y2 = y + height;
+  return [
+     x1, y1,
+     x2, y1,
+     x1, y2,
+     x1, y2,
+     x2, y1,
+     x2, y2,
+  ];
 }
 

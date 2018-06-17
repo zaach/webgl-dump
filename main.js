@@ -8,6 +8,8 @@ function main() {
     initProgram,
     drawScene: drawElementScene,
   });
+  setupWebcam();
+  loadGif('assets/santa.gif')
 }
 
 
@@ -38,10 +40,7 @@ function initProgram(gl) {
     varying highp vec2 vTextureCoord;
 
     void main(void) {
-      //mat4 modelViewMatrix = rotationMatrix(vec3(0.0, 0.0, 1.0), u_time * PI) *  scale(0.5, 0.5, 1.0);
-      //mat4 projectionMatrix = mat4(window_scale);
       gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
-      //gl_Position = projectionMatrix * modelViewMatrix * aVertexPosition;
       vColor = aVertexColor;
       vTextureCoord = aTextureCoord;
 
@@ -68,6 +67,7 @@ function initProgram(gl) {
     uniform vec2 u_resolution;
     uniform float u_time;
     uniform sampler2D uSampler;
+    uniform sampler2D uAnimated;
 
     varying vec4 vColor;
     varying highp vec3 vLighting;
@@ -80,9 +80,10 @@ function initProgram(gl) {
       //gl_FragColor = mix(vec4(st, 0.0, 1.0), vColor, 0.0);
 
       highp vec4 texelColor = texture2D(uSampler, vTextureCoord);
+      highp vec4 texelColor2 = texture2D(uAnimated, vTextureCoord);
 
-      gl_FragColor = vec4(texelColor.rgb * vLighting, texelColor.a);
-      //gl_FragColor = vColor * vec4(vLighting, 1.0);
+      gl_FragColor = vec4(mix(texelColor2.rgb, texelColor.rgb, 1.0-texelColor2.a), 1.0);
+      gl_FragColor = gl_FragColor * vec4(vLighting, 1.0);
     }
   `;
 
@@ -107,10 +108,12 @@ function initProgram(gl) {
       modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
       normalMatrix: gl.getUniformLocation(shaderProgram, 'uNormalMatrix'),
       uSampler: gl.getUniformLocation(shaderProgram, 'uSampler'),
+      uAnimated: gl.getUniformLocation(shaderProgram, 'uAnimated'),
       u_resolution: gl.getUniformLocation(shaderProgram, 'u_resolution'),
       u_time: gl.getUniformLocation(shaderProgram, 'u_time'),
     },
     program2d: initProgram2d(gl),
+    programImage: initProgramImage(gl),
   };
 
   // Here's where we call the routine that builds all the
@@ -321,7 +324,12 @@ function initElementBuffers(gl) {
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoordinates),
                 gl.STATIC_DRAW);
 
-  //const texture = loadTexture(gl, 'image.jpg');
+  const imageTexture = loadTexture(gl, 'image.jpg');
+
+  const animatedImageTexture = initVideoTexture(gl);
+
+  const videoTexture = initVideoTexture(gl);
+
   const texture = createAndSetupTexture(gl);
   {
     // define size and format of level 0
@@ -347,6 +355,7 @@ function initElementBuffers(gl) {
   gl.framebufferTexture2D( gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0,
                                                   gl.TEXTURE_2D, texture, 0 );
 
+
   return {
     position: positionBuffer,
     color: colorBuffer,
@@ -354,7 +363,10 @@ function initElementBuffers(gl) {
     normal: normalBuffer,
     textureCoord: textureCoordBuffer,
     texture,
+    videoTexture,
+    imageTexture,
     framebuffer,
+    animatedImageTexture,
   };
 }
 
@@ -370,15 +382,19 @@ function drawElementScene(gl, programInfo, buffers, deltaTime) {
 
   gl.bindFramebuffer(gl.FRAMEBUFFER,null);
   gl.viewport(0,0, gl.canvas.clientWidth, gl.canvas.clientHeight);
+
+
   gl.disable(gl.BLEND);
   gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
   gl.clearDepth(1.0);                 // Clear everything
+
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  drawSceneImage(gl, programInfo.programImage.programInfo, programInfo.programImage.buffers, deltaTime, gl.canvas.clientWidth, gl.canvas.clientHeight);
+
   gl.enable(gl.DEPTH_TEST);           // Enable depth testing
   gl.depthFunc(gl.LEQUAL);            // Near things obscure far things
 
-  // Clear the canvas before we start drawing on it.
-
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
   // Create a perspective matrix, a special matrix that is
   // used to simulate the distortion of perspective in a camera.
@@ -401,28 +417,11 @@ function drawElementScene(gl, programInfo, buffers, deltaTime) {
                    zNear,
                    zFar);
 
-  // Set the drawing position to the "identity" point, which is
-  // the center of the scene.
-  const modelViewMatrix = mat4.create();
-
-  // Now move the drawing position a bit to where we want to
-  // start drawing the square.
-
-  mat4.translate(modelViewMatrix,     // destination matrix
-                 modelViewMatrix,     // matrix to translate
-                 [-0.0, 0.0, -8.0]);  // amount to translate
-  mat4.rotate(modelViewMatrix,  // destination matrix
-              modelViewMatrix,  // matrix to rotate
-              sceneTime * 4,     // amount to rotate in radians
-              [0, 0, 1]);       // axis to rotate around (Z)
-  mat4.rotate(modelViewMatrix,  // destination matrix
-              modelViewMatrix,  // matrix to rotate
-              sceneTime * 2.7,// amount to rotate in radians
-              [0, 1, 0]);       // axis to rotate around (X)
-
-  const normalMatrix = mat4.create();
-  mat4.invert(normalMatrix, modelViewMatrix);
-  mat4.transpose(normalMatrix, normalMatrix);
+  const viewMatrix = mat4.create();
+  const distance = 8;
+  mat4.lookAt(viewMatrix, [distance * Math.sin(sceneTime) * 1,0, distance * Math.cos(sceneTime / 3) * 2],[0,0,0],[0,1,0]);
+  //mat4.invert(viewMatrix, viewMatrix);
+  mat4.multiply(projectionMatrix, projectionMatrix, viewMatrix);
 
   // Tell WebGL how to pull out the positions from the position
   // buffer into the vertexPosition attribute
@@ -509,14 +508,6 @@ function drawElementScene(gl, programInfo, buffers, deltaTime) {
       programInfo.uniformLocations.projectionMatrix,
       false,
       projectionMatrix);
-  gl.uniformMatrix4fv(
-      programInfo.uniformLocations.modelViewMatrix,
-      false,
-      modelViewMatrix);
-  gl.uniformMatrix4fv(
-      programInfo.uniformLocations.normalMatrix,
-      false,
-      normalMatrix);
 
   gl.uniform2f(
      programInfo.uniformLocations.u_resolution,
@@ -526,20 +517,76 @@ function drawElementScene(gl, programInfo, buffers, deltaTime) {
      programInfo.uniformLocations.u_time,
      sceneTime);
 
+
+
   // Tell WebGL we want to affect texture unit 0
   gl.activeTexture(gl.TEXTURE0);
-
-  // Bind the texture to texture unit 0
   gl.bindTexture(gl.TEXTURE_2D, buffers.texture);
+  gl.activeTexture(gl.TEXTURE1);
+  gl.bindTexture(gl.TEXTURE_2D, buffers.imageTexture);
+
+  if (videoReady) {
+    if (isCapturing) {
+      updateVideoTexture(gl, buffers.videoTexture, selectFrame(animationFrames, animationFrames.length/videoPreview.duration, sceneTime));
+    } else {
+      updateVideoTexture(gl, buffers.videoTexture, videoPreview);
+    }
+  } else if (loadedGif) {
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    updateVideoTexture(gl, buffers.animatedImageTexture, selectFrame(loadedGif.completeFrames, loadedGif.completeFrames.length/loadedGif.duration, sceneTime));
+  }
 
   // Tell the shader we bound the texture to texture unit 0
   gl.uniform1i(programInfo.uniformLocations.uSampler, 0);
+  gl.uniform1i(programInfo.uniformLocations.uAnimated, 1);
 
-  {
-    const vertexCount = 36;
-    const type = gl.UNSIGNED_SHORT;
-    const offset = 0;
-    gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
+
+  for (let x = -1; x <= 1; ++x) {
+    // Set the drawing position to the "identity" point, which is
+    // the center of the scene.
+    const modelViewMatrix = mat4.create();
+
+    // Now move the drawing position a bit to where we want to
+    // start drawing the square.
+
+    const scale = 1 + 0.3 * Math.sin(sceneTime + x * 2)
+
+    mat4.translate(modelViewMatrix,     // destination matrix
+                   modelViewMatrix,     // matrix to translate
+                   [-2.0 * x , 0.0, -0.0]);  // amount to translate
+    mat4.rotate(modelViewMatrix,  // destination matrix
+                modelViewMatrix,  // matrix to rotate
+                sceneTime * (x + 1),     // amount to rotate in radians
+                [0, 0, 1]);       // axis to rotate around (Z)
+    mat4.rotate(modelViewMatrix,  // destination matrix
+                modelViewMatrix,  // matrix to rotate
+                sceneTime * 0.7 * (x + 1),// amount to rotate in radians
+                [0, x, 0]);       // axis to rotate around (X)
+    mat4.scale(modelViewMatrix,  // destination matrix
+                modelViewMatrix,  // matrix to rotate
+                //[1, 1, 1]);       // axis to rotate around (X)
+                [scale, scale, scale]);       // axis to rotate around (X)
+
+
+    const normalMatrix = mat4.create();
+    mat4.invert(normalMatrix, modelViewMatrix);
+    mat4.transpose(normalMatrix, normalMatrix);
+
+    gl.uniformMatrix4fv(
+        programInfo.uniformLocations.modelViewMatrix,
+        false,
+        modelViewMatrix);
+    gl.uniformMatrix4fv(
+        programInfo.uniformLocations.normalMatrix,
+        false,
+        normalMatrix);
+
+    {
+      const vertexCount = 36;
+      const type = gl.UNSIGNED_SHORT;
+      const offset = 0;
+      gl.drawElements(gl.TRIANGLES, vertexCount, type, offset);
+    }
   }
 
   sceneTime += deltaTime;
