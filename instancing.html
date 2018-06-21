@@ -1,0 +1,60 @@
+<!doctype html>
+
+<html>
+<head>
+  <title>webgl test</title>
+
+  <style>
+    body, html {
+      margin: 0px;
+      padding: 0px;
+    }
+    #capture {
+      position: absolute;
+      top: -800px;
+      left: 0px;
+      background-color: white;
+      transition: top 0.7s;
+    }
+    #capture button {
+      font-size: 16px;
+      padding: 10px;
+      margin: 10px;
+      <!--width: 300px;-->
+      <!--height: 100px;-->
+    }
+    body:hover #capture {
+      top: 0px;
+    }
+    @media only screen and  (max-device-width : 1024px) and (orientation : portrait) {
+      #capture {
+        top: 0px;
+      }
+    }
+  </style>
+</head>
+<body>
+<canvas id="glcanvas" width="640" height="480"></canvas>
+
+<div id="capture">
+<button onClick="startCapture()">record</button>
+<button onClick="stopCapture()">stop</button>
+<button onClick="saveCapture()">save</button>
+<button onClick="saveCaptureMp4()">save mp4</button>
+<button id="record-video">Record Webcam</button>
+<button id="stop-recording-video" disabled>Stop Recording</button>
+  <video id="video-preview" controls loop></video>
+</div>
+<script src="vendor/RecordRTC.js"></script>
+<script src="vendor/CCapture.all.min.js"></script>
+<script src="vendor/gl-matrix.js"></script>
+<script src="convert.js"></script>
+<script src="vendor/omggif.js"></script>
+<script src="common.js"></script>
+<script src="gif.js"></script>
+<script src="instancing.js"></script>
+<script>
+  main2d()
+</script>
+</body>
+</html>

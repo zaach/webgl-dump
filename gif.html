@@ -17,11 +17,15 @@
 <body>
 <canvas id="glcanvas" width="640" height="480"></canvas>
 <p>
+<button onclick="record()">record</button>
+<button onclick="stopRecording()">end record</button>
 <button onclick="toggleDirection()">reverse</button>
+<button onclick="toggleBounce()">toggle bounce</button>
 <button onclick="changeSpeed(2)">slower</button>
 <button onclick="changeSpeed(1/2)">faster</button>
 
 <script src="vendor/omggif.js"></script>
+<script src="vendor/gif.js"></script>
 <script src="common.js"></script>
 <script src="gif.js"></script>
 <script>

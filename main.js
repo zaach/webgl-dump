@@ -1,5 +1,6 @@
 main();
 
+let scaledLoadedGif = null
 //
 // Start here
 //
@@ -324,7 +325,7 @@ function initElementBuffers(gl) {
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoordinates),
                 gl.STATIC_DRAW);
 
-  const imageTexture = loadTexture(gl, 'image.jpg');
+  const imageTexture = loadTexture(gl, 'assets/image.jpg');
 
   const animatedImageTexture = initVideoTexture(gl);
 

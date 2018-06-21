@@ -9,6 +9,7 @@ function mainImage() {
   });
 }
 
+let imageLoaded = false;
 let imgWidth = 1;
 let imgHeight = 1;
 
@@ -31,7 +32,8 @@ function initProgramImage(gl) {
 
     void main(void) {
       mat3 texture_scale = mat3(
-          vec3(u_textureSize.y/u_textureSize.x, 0.0, 0.0),
+          vec3(1, 0.0, 0.0),
+          //vec3(u_textureSize.y/u_textureSize.x, 0.0, 0.0),
           vec3(    0.0, 1.0, 0.0),
           vec3(    0.0, 0.0, 1.0)
       );
@@ -184,16 +186,45 @@ function initBuffersImage(gl) {
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoordinates),
                 gl.STATIC_DRAW);
 
-  const imageTexture = loadTexture(gl, 'image.jpg', (img) => {
+  const imageTexture = loadTexture(gl, 'assets/image.jpg', (img) => {
     imgWidth = img.width;
     imgHeight = img.height;
+    textures.forEach(t => {
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.texImage2D(
+          gl.TEXTURE_2D, 0, gl.RGBA, img.width, img.height, 0,
+          gl.RGBA, gl.UNSIGNED_BYTE, null);
+    })
+    imageLoaded = true;
     console.log('img', img.width, img.height)
   });
+
+  const textures = [];
+  const framebuffers = []
+
+  for (let ii = 0; ii < 2; ++ii) {
+    let texture = createAndSetupTexture(gl);
+    gl.texImage2D(
+        gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0,
+        gl.RGBA, gl.UNSIGNED_BYTE, null);
+    textures.push(texture)
+
+    // Create a framebuffer
+    let fbo = gl.createFramebuffer();
+    framebuffers.push(fbo);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+ 
+    // Attach a texture to it.
+    gl.framebufferTexture2D(
+        gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, textures[ii], 0);
+  }
 
   return {
     position: positionBuffer,
     textureCoord: textureCoordBuffer,
     imageTexture,
+    textures,
+    framebuffers,
   };
 }
 
@@ -261,8 +292,6 @@ function drawSceneImage(gl, programInfo, buffers, deltaTime, width, height) {
      imgWidth, imgHeight);
 
     //console.log('kern', kernel, computeKernelWeight(kernel))
-  gl.uniform1fv(programInfo.uniformLocations.u_kernel, kernel);
-  gl.uniform1f(programInfo.uniformLocations.u_kernelWeight, computeKernelWeight(kernel));
 
   // Tell WebGL we want to affect texture unit 0
   gl.activeTexture(gl.TEXTURE0);
@@ -271,16 +300,54 @@ function drawSceneImage(gl, programInfo, buffers, deltaTime, width, height) {
   // Tell the shader we bound the texture to texture unit 0
   gl.uniform1i(programInfo.uniformLocations.uSampler, 0);
 
-  {
+  if (imageLoaded) {
+    // loop through each effect we want to apply.
+    for (var ii = 0; ii < effectsToApply.length; ++ii) {
+      // Setup to draw into one of the framebuffers.
+      setFramebuffer(buffers.framebuffers[ii % 2], imgWidth, imgHeight);
+      drawWithKernel(effectsToApply[ii]);
+
+      // for the next draw, use the texture we just rendered to.
+      gl.bindTexture(gl.TEXTURE_2D, buffers.textures[ii % 2]);
+    }
+
+    // finally draw the result to the canvas.
+    //gl.uniform1f(flipYLocation, -1);  // need to y flip for canvas
+    setFramebuffer(null, gl.canvas.clientWidth, gl.canvas.clientHeight);
+    drawWithKernel("normal");
+  } else {
     const offset = 0;
     const vertexCount = 6;
     gl.drawArrays(gl.TRIANGLES, offset, vertexCount);
   }
 
+  function setFramebuffer(fbo, width, height) {
+    // make this the framebuffer we are rendering to.
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+ 
+    // Tell the shader the resolution of the framebuffer.
+    gl.uniform2f(programInfo.uniformLocations.u_resolution, width, height);
+ 
+    // Tell webgl the viewport setting needed for framebuffer.
+    gl.viewport(0, 0, width, height);
+  }
+ 
+  function drawWithKernel(name) {
+    let kernel = kernels[name]
+    // set the kernel
+    //gl.uniform1fv(kernelLocation, kernels[name]);
+
+    gl.uniform1fv(programInfo.uniformLocations.u_kernel, kernel);
+    gl.uniform1f(programInfo.uniformLocations.u_kernelWeight, computeKernelWeight(kernel));
+ 
+    // Draw the rectangle.
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
   sceneTimeImage += deltaTime;
 }
 
-let selectedKernel = 'emboss';
+let selectedKernel = 'gaussianBlur';
 
 // Define several convolution kernels
 var kernels = {
@@ -385,6 +452,18 @@ var kernels = {
       0,  1,  2
   ]
 };
+
+var effectsToApply = [
+    //"gaussianBlur",
+    //"gaussianBlur",
+    //"gaussianBlur",
+    //"gaussianBlur",
+    "emboss",
+    //"gaussianBlur2",
+    //"gaussianBlur3",
+    //"gaussianBlur",
+    //"edgeDetect2"
+  ];
 
 function computeKernelWeight(kernel) {
   var weight = kernel.reduce(function(prev, curr) {

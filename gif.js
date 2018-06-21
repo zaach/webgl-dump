@@ -109,6 +109,10 @@ function getCompleteFrames({ reader, frames }, canvas) {
   return promise
 }
 
+function toggleBounce() {
+  bounce = !bounce;
+}
+
 function toggleDirection() {
   isBackward = isBackward ? 0 : 1;
 }
@@ -117,6 +121,28 @@ function changeSpeed(val) {
   speed *= val
 }
 
+let recordingGif = null
+function record() {
+  recordingGif = new GIF({
+    workers: 2,
+    quality: 10,
+    debug: true,
+    workerScript: 'vendor/gif.worker.js',
+  });
+}
+function stopRecording() {
+  let gif = recordingGif;
+  recordingGif = null
+
+  gif.on('finished', function(blob) {
+    console.log('GIF RECORDED', blob)
+    //window.open(URL.createObjectURL(blob));
+    saver(URL.createObjectURL(blob), null, 'new.gif');
+  });
+  gif.render();
+}
+
+let bounce = false
 // 0 = forward, 1 = backward
 let isBackward = 0
 let speed = 1
@@ -130,16 +156,19 @@ function runCompleteGif({ reader, frames, completeFrames, loopCount }, canvas) {
   function onFrame(frame, imageData, i) {
     ctx.clearRect(0, 0, width, height)
     ctx.putImageData(imageData, -frame.x, -frame.y)
+    if (recordingGif) recordingGif.addFrame(imageData, { delay: frame.delay * speed * 10 })
   }
 
   let promise = new Promise((resolve, reject) => {
     let tick = 0
     function loop() {
       const selected = (tick < 0 ? ((frames.length - 1)) : 0) + tick % frames.length
-      //const selected =  Math.abs(tick) % frames.length
+
       console.log('SELECTED?', selected, isBackward, tick)
       setTimeout(function () {
         onFrame(frames[selected], completeFrames[selected], tick)
+        if (bounce && selected === 0 && isBackward) toggleDirection()
+        else if (bounce && selected === frames.length -1 && !isBackward) toggleDirection()
         tick += isBackward ? -1 : 1
         loop()
       }, frames[selected].delay * 10 * speed)

@@ -7,7 +7,7 @@ function startCapture() {
   capturer = new CCapture({
     format: 'webm',
     verbose: true,
-    timeLimit: 6,
+    timeLimit: 15,
     framerate: CAPTURE_FRAMERATE,
     //motionBlurFrames: 20,
   });
@@ -120,6 +120,7 @@ function loadShader(gl, type, source) {
 
 function initGL({
     canvas = document.querySelector('#glcanvas'),
+    instancing = false,
     initProgram,
     drawScene,
     width,
@@ -137,7 +138,27 @@ function initGL({
     canvas.height = height || window.innerHeight;
   })
 
-  const gl = canvas.getContext('webgl');
+  let gl
+  if (instancing) {
+    //try {
+      //gl = canvas.getContext('webgl2');
+    //} catch (e) {
+      gl = canvas.getContext('webgl');
+      let ext = gl.getExtension('ANGLE_instanced_arrays');
+      if (typeof gl.vertexAttribDivisor === 'undefined') {
+        gl.vertexAttribDivisor = function (...args) {
+          ext.vertexAttribDivisorANGLE.apply(ext, args)
+        }
+      }
+      if (typeof gl.drawArraysInstanced === 'undefined') {
+        gl.drawArraysInstanced = function (...args) {
+          ext.drawArraysInstancedANGLE.apply(ext, args)
+        }
+      }
+    //}
+  } else {
+    gl = canvas.getContext('webgl');
+  }
 
   // If we don't have a GL context, give up now
 
@@ -156,7 +177,7 @@ function initGL({
   // Draw the scene repeatedly
   function render(now) {
     now *= 0.001;  // convert to seconds
-    const deltaTime = now - then;
+    const deltaTime = then && now - then;
     then = now;
 
     // Draw the scene
@@ -370,11 +391,12 @@ function fetchImage(url, cb) {
 
 let loadedGif = null
 function loadGif(url) {
-  fetchImage(url)
+  return fetchImage(url)
   .then(data => deconstructGif(data))
   .then(result => {
     videoInit = true;
     loadedGif = result
+    return result;
   })
 }
 
@@ -393,3 +415,37 @@ function rectanglePositions(x, y, width, height) {
   ];
 }
 
+function scaleImageDataToShortSide(imageData, desiredMinSize) {
+  let scale
+  if (imageData.width < imageData.height) {
+    scale = image.height * desiredMinSize / imageData.width
+  } else {
+    scale = image.width * desiredMinSize / imageData.height
+  }
+  return scaleImageData(imageData, scale)
+}
+
+function scaleImageData(imageData, scale) {
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+
+console.log('SCALING', scale, imageData)
+    var scaled = ctx.createImageData(imageData.width * scale, imageData.height * scale);
+    var subLine = ctx.createImageData(scale, 1).data
+    for (var row = 0; row < imageData.height; row++) {
+        for (var col = 0; col < imageData.width; col++) {
+            var sourcePixel = imageData.data.subarray(
+                (row * imageData.width + col) * 4,
+                (row * imageData.width + col) * 4 + 4
+            );
+            for (var x = 0; x < scale; x++) subLine.set(sourcePixel, x*4)
+            for (var y = 0; y < scale; y++) {
+                var destRow = row * scale + y;
+                var destCol = col * scale;
+                scaled.data.set(subLine, (destRow * scaled.width + destCol) * 4)
+            }
+        }
+    }
+
+    return scaled;
+}
