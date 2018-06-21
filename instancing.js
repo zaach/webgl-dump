@@ -8,7 +8,7 @@ function main2d() {
     initProgram: initProgram2d,
     drawScene: drawScene2d,
   });
-  loadGif('assets/blink.gif')
+  loadGif('assets/dave.gif')
 }
 
 function initProgram2d(gl) {
