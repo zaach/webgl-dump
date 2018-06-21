@@ -541,7 +541,6 @@ const easeIn  = t => Math.pow(t, 3)
     const offset = 0;
     const vertexCount = buffers.vertexCount;
     const instanceCount = SIDE * SIDE;
-    //console.log('VOUNCCC', vertexCount, instanceCount)
     gl.drawArraysInstanced(gl.TRIANGLES, offset, vertexCount, instanceCount);
   }
 
